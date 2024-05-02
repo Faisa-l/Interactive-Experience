@@ -9,8 +9,11 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
+using Unity.VisualScripting;
+
 #if UNITY_EDITOR
-    using UnityEditor;
+using UnityEditor;
+using UnityEditor.SearchService;
     using System.Net;
 #endif
 
@@ -21,13 +24,14 @@ public class FirstPersonController : MonoBehaviour
     #region Camera Movement Variables
 
     public Camera playerCamera;
+    public GameObject consumeText;
 
     public float fov = 60f;
     public bool invertCamera = false;
     public bool cameraCanMove = true;
     public float mouseSensitivity = 2f;
     public float maxLookAngle = 50f;
-
+    
     // Crosshair
     public bool lockCursor = true;
     public bool crosshair = true;
@@ -89,6 +93,9 @@ public class FirstPersonController : MonoBehaviour
     private float sprintBarHeight;
     private bool isSprintCooldown = false;
     private float sprintCooldownReset;
+
+    // Internal variables for consuming
+    private bool canInteract = false;
 
     #endregion
 
@@ -362,6 +369,16 @@ public class FirstPersonController : MonoBehaviour
         {
             HeadBob();
         }
+
+        if (Input.GetKeyDown(KeyCode.E))
+        {
+            canInteract = true;
+        }
+
+        if (Input.GetKeyUp(KeyCode.E))
+        {
+            canInteract = false;
+        }
     }
 
     void FixedUpdate()
@@ -526,6 +543,64 @@ public class FirstPersonController : MonoBehaviour
             joint.localPosition = new Vector3(Mathf.Lerp(joint.localPosition.x, jointOriginalPos.x, Time.deltaTime * bobSpeed), Mathf.Lerp(joint.localPosition.y, jointOriginalPos.y, Time.deltaTime * bobSpeed), Mathf.Lerp(joint.localPosition.z, jointOriginalPos.z, Time.deltaTime * bobSpeed));
         }
     }
+
+    // Modification on the first person controller
+    // Used to interact with the world
+    private void OnTriggerStay(Collider other)
+    {
+        // Consume fruit
+        if (other.gameObject.tag == "Fruit")
+        {
+            consumeText.SetActive(true);
+            if (canInteract)
+            {
+                consumeText.SetActive(false);
+                Debug.Log("Consumed fruit");
+                other.gameObject.SetActive(false);
+                walkSpeed += 0.5f;
+                sprintSpeed += 0.5f;
+                return;
+            }
+        }
+
+        // Open chest
+        else if (other.gameObject.tag == "Chest")
+        {
+            consumeText.SetActive(true);
+            if (canInteract)
+            {
+                consumeText.SetActive(false);
+                Animator animator = other.gameObject.GetComponent<Animator>();
+                animator.SetTrigger("startAnim");
+                return;
+            }
+        }
+        
+        // Drink drink
+        else if (other.gameObject.tag == "Drink")
+        {
+            consumeText.SetActive(true);
+            if (canInteract)
+            {
+                consumeText.SetActive(false);
+                Animator animator = other.gameObject.GetComponent<Animator>();
+                BoxCollider boxCollider = other.gameObject.GetComponent<BoxCollider>();
+                animator.SetTrigger("startAnim");
+                boxCollider.enabled = false;
+                jumpPower += 0.5f;
+            }
+        }
+    }
+
+    // Modification on the first person controller
+    // Hides the consumable text
+    private void OnTriggerExit(Collider other)
+    {
+        if ((other.gameObject.tag == "Fruit") || (other.gameObject.tag == "Chest") || (other.gameObject.tag == "Drink"))
+        {
+            consumeText.SetActive(false);
+        }
+    }
 }
 
 
@@ -560,6 +635,7 @@ public class FirstPersonController : MonoBehaviour
         GUILayout.Label("Camera Setup", new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold, fontSize = 13 }, GUILayout.ExpandWidth(true));
         EditorGUILayout.Space();
 
+        fpc.consumeText = (GameObject)EditorGUILayout.ObjectField(new GUIContent("Consumable Text", "Text to display when next to consumable."), fpc.consumeText, typeof(GameObject), true);
         fpc.playerCamera = (Camera)EditorGUILayout.ObjectField(new GUIContent("Camera", "Camera attached to the controller."), fpc.playerCamera, typeof(Camera), true);
         fpc.fov = EditorGUILayout.Slider(new GUIContent("Field of View", "The camera’s view angle. Changes the player camera directly."), fpc.fov, fpc.zoomFOV, 179f);
         fpc.cameraCanMove = EditorGUILayout.ToggleLeft(new GUIContent("Enable Camera Rotation", "Determines if the camera is allowed to move."), fpc.cameraCanMove);
